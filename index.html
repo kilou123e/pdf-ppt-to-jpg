@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF / PPT 转高清 JPG 工具</title>
+<link rel="stylesheet" href="assets/vendor/pptxjs.css">
+<style>
+:root{
+  --bg:#f4f6f9; --card:#ffffff; --line:#e3e8ef; --text:#1f2937; --muted:#6b7280;
+  --brand:#2563eb; --brand-weak:#eff4ff; --brand-line:#bcd3ff; --ok:#16a34a; --warn:#d97706;
+  --danger:#dc2626; --radius:12px; --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.10);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  background:var(--bg); color:var(--text); font-size:14px; line-height:1.55;
+}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input[type=file]{display:none}
+
+/* ===== 头部 ===== */
+header{
+  background:var(--card); border-bottom:1px solid var(--line);
+  padding:16px 28px; display:flex; align-items:center; gap:14px; position:sticky; top:0; z-index:30;
+}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-logo{
+  width:38px;height:38px;border-radius:10px;background:var(--brand);color:#fff;
+  display:flex;align-items:center;justify-content:center;flex:none;
+}
+.brand h1{font-size:17px;font-weight:700;letter-spacing:.2px}
+.brand p{font-size:12px;color:var(--muted);margin-top:1px}
+.badges{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.badge{
+  font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);
+  background:#fafbfc;color:#374151;display:inline-flex;align-items:center;gap:5px;
+}
+.badge b{font-weight:600}
+.badge .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);display:inline-block}
+.badge .dot.warn{background:var(--warn)}
+
+/* ===== 主区域 ===== */
+main{max-width:1280px;margin:0 auto;padding:24px 28px 120px}
+
+.dropzone{
+  border:2px dashed #c3cfdd;border-radius:var(--radius);background:var(--card);
+  padding:44px 24px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s;
+}
+.dropzone:hover,.dropzone.drag{border-color:var(--brand);background:var(--brand-weak)}
+.dz-icon{width:52px;height:52px;margin:0 auto 12px;border-radius:14px;background:var(--brand-weak);
+  display:flex;align-items:center;justify-content:center;color:var(--brand)}
+.dropzone h2{font-size:16px;font-weight:600}
+.dropzone .sub{color:var(--muted);font-size:13px;margin-top:6px}
+.dz-btn{
+  display:inline-flex;align-items:center;gap:6px;margin-top:14px;padding:8px 18px;
+  background:var(--brand);color:#fff;border-radius:8px;font-size:14px;font-weight:500;
+  box-shadow:var(--shadow);transition:background .15s;
+}
+.dz-btn:hover{background:#1d4ed8}
+.dz-tips{margin-top:14px;font-size:12px;color:var(--muted);display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.dz-tips .t{display:inline-flex;align-items:center;gap:4px}
+.dropzone.compact{padding:12px 20px;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap}
+.dropzone.compact .dz-icon{width:30px;height:30px;margin:0;border-radius:9px}
+.dropzone.compact .dz-icon svg{width:17px;height:17px}
+.dropzone.compact h2{font-size:14px}
+.dropzone.compact .sub,.dropzone.compact .dz-tips,.dropzone.compact .dz-btn{display:none}
+
+/* ===== 文件区块 ===== */
+.file-card{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  margin-top:20px;overflow:hidden;box-shadow:var(--shadow);
+}
+.file-head{
+  display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line);
+  flex-wrap:wrap;
+}
+.file-type{
+  width:36px;height:36px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;
+}
+.file-type.pdf{background:#dc2626}.file-type.pptx{background:#ea580c}.file-type.img{background:#16a34a}.file-type.unknown{background:#6b7280}
+.file-name{font-weight:600;font-size:14px;word-break:break-all;min-width:0}
+.file-meta{font-size:12px;color:var(--muted)}
+.file-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+.btn{
+  padding:6px 12px;border-radius:8px;font-size:13px;border:1px solid var(--line);
+  background:#fff;color:#374151;transition:background .12s,border-color .12s;
+}
+.btn:hover{border-color:#c9d4e2;background:#f8fafc}
+.btn.danger{color:var(--danger)}
+.btn.danger:hover{border-color:#f3b8b8;background:#fef2f2}
+.file-progress{font-size:12px;color:var(--muted)}
+
+/* 缩略图网格 */
+.thumb-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(min(var(--thumb-size,240px),100%),1fr));gap:14px;padding:16px 18px;
+}
+.thumb{
+  position:relative;border:2px solid var(--line);border-radius:10px;overflow:hidden;
+  background:#fafbfc;cursor:pointer;transition:border-color .12s,transform .12s,box-shadow .12s;
+  user-select:none;
+}
+button.thumb{text-align:left}
+.thumb:hover{box-shadow:var(--shadow)}
+.thumb.sel{border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.18)}
+.thumb canvas,.thumb img{display:block;width:100%;height:auto}
+.thumb .pg{
+  position:absolute;left:6px;top:6px;background:rgba(17,24,39,.72);color:#fff;font-size:11px;
+  padding:2px 7px;border-radius:6px;font-weight:600;pointer-events:none;
+}
+.thumb .check{
+  position:absolute;right:6px;top:6px;width:22px;height:22px;border-radius:50%;
+  background:#fff;border:1.5px solid #c7d2e0;display:flex;align-items:center;justify-content:center;
+  color:transparent;pointer-events:none;transition:all .12s;
+}
+.thumb.sel .check{background:var(--brand);border-color:var(--brand);color:#fff}
+.thumb .load-tip{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  color:var(--muted);font-size:12px;background:#fafbfc;
+}
+
+/* ===== 底部操作栏 ===== */
+.toolbar{
+  position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);
+  border-top:1px solid var(--line);z-index:40;padding:12px 28px;
+}
+.toolbar-inner{max-width:1280px;margin:0 auto;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.tb-stat{font-size:13px;color:#374151;white-space:nowrap}
+.tb-stat b{color:var(--brand)}
+.tb-group{display:flex;align-items:center;gap:8px}
+.tb-label{font-size:13px;color:var(--muted);white-space:nowrap}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
+.seg button{padding:5px 12px;font-size:13px;color:#374151;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:none}
+.seg button.on{background:var(--brand);color:#fff;font-weight:600}
+.q-row{display:flex;align-items:center;gap:8px}
+.q-row input[type=range]{width:96px;accent-color:var(--brand)}
+.q-val{font-size:12px;color:var(--muted);min-width:34px;text-align:right}
+.tb-main{margin-left:auto;display:flex;gap:10px;align-items:center}
+.btn-main{
+  padding:9px 20px;border-radius:9px;background:var(--brand);color:#fff;font-size:14px;font-weight:600;
+  display:inline-flex;align-items:center;gap:7px;box-shadow:var(--shadow);transition:background .15s;
+}
+.btn-main:hover{background:#1d4ed8}
+.btn-main:disabled{background:#93b4f5;cursor:not-allowed;box-shadow:none}
+.btn-ghost{
+  padding:9px 16px;border-radius:9px;border:1px solid var(--line);background:#fff;color:#374151;
+  font-size:14px;display:inline-flex;align-items:center;gap:7px;transition:background .12s;
+}
+.btn-ghost:hover{background:#f8fafc}
+
+/* 进度遮罩 */
+#busy{
+  position:fixed;inset:0;background:rgba(17,24,39,.45);z-index:60;display:none;
+  align-items:center;justify-content:center;
+}
+#busy.on{display:flex}
+.busy-box{
+  background:#fff;border-radius:14px;padding:26px 34px;width:min(420px,90vw);text-align:center;
+  box-shadow:0 20px 50px rgba(0,0,0,.25);
+}
+.spinner{width:34px;height:34px;margin:0 auto 14px;border:3.5px solid #e2e8f0;border-top-color:var(--brand);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.busy-title{font-size:15px;font-weight:600;margin-bottom:6px}
+.busy-sub{font-size:12.5px;color:var(--muted);margin-bottom:14px;word-break:break-all}
+.pbar{height:8px;background:#eef2f7;border-radius:99px;overflow:hidden}
+.pbar i{display:block;height:100%;width:0;background:var(--brand);border-radius:99px;transition:width .15s}
+.busy-pct{font-size:12px;color:var(--muted);margin-top:8px}
+
+/* 提示条 / toast */
+#toast-wrap{position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:80;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{
+  background:#111827;color:#fff;font-size:13px;padding:9px 18px;border-radius:9px;box-shadow:0 8px 24px rgba(0,0,0,.22);
+  animation:tin .2s ease;max-width:86vw;
+}
+.toast.err{background:#b91c1c}.toast.ok{background:#15803d}
+@keyframes tin{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+
+/* off-stage 渲染区（pptxjs 渲染容器，不影响布局） */
+#offstage{position:fixed;left:-20000px;top:0;pointer-events:none;z-index:-1}
+#offstage .slide{border:none;border-radius:0;margin:0 auto 12px}
+
+.empty-tip{text-align:center;color:var(--muted);padding:60px 0 20px;font-size:14px}
+.hint-note{font-size:12.5px;color:var(--muted);background:#f8fafc;border:1px dashed #d5dde8;border-radius:9px;padding:9px 14px;margin:14px 18px 0}
+@media (max-width:760px){
+  main{padding:16px 14px 170px}
+  header{padding:12px 14px}
+  .thumb-grid{grid-template-columns:repeat(auto-fill,minmax(min(var(--thumb-size,240px),100%),1fr));gap:10px;padding:12px}
+  .toolbar{padding:10px 14px}
+  .tb-main{margin-left:0;width:100%;justify-content:space-between}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-logo">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></svg>
+    </div>
+    <div>
+      <h1>PDF / PPT 转高清 JPG</h1>
+      <p>解析文档 → 选择页面 → 导出高清图片，全程本地处理，不上传</p>
+    </div>
+  </div>
+  <div class="badges">
+    <span class="badge"><span class="dot"></span>PDF</span>
+    <span class="badge"><span class="dot"></span>PPTX</span>
+    <span class="badge"><span class="dot"></span>图片</span>
+    <span class="badge"><span class="dot warn"></span>PPT 老格式请先转 PDF</span>
+  </div>
+</header>
+
+<main>
+  <section id="dropzone" class="dropzone">
+    <div class="dz-icon">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+    </div>
+    <h2>拖入文件，或点击选择</h2>
+    <p class="sub">支持同时选择多个 PDF / PPTX / 图片文件，每个文件的所有页面都会解析出来供你挑选</p>
+    <button class="dz-btn" id="pickBtn">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+      选择文件
+    </button>
+    <input type="file" id="fileInput" multiple accept=".pdf,.pptx,.jpg,.jpeg,.png,.webp,.bmp">
+    <div class="dz-tips">
+      <span class="t"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>文件只在本机解析，不会上传</span>
+      <span class="t"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.9 4.9l2.8 2.8"/><path d="M16.3 16.3l2.8 2.8"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.9 19.1l2.8-2.8"/><path d="M16.3 7.7l2.8-2.8"/></svg>倍率越高图越大，4x 约等于 300 DPI</span>
+    </div>
+  </section>
+
+  <div id="fileList"></div>
+</main>
+
+<div class="toolbar">
+  <div class="toolbar-inner">
+    <div class="tb-stat">已选 <b id="selCount">0</b> / <span id="totalCount">0</span> 页</div>
+    <div class="tb-group">
+      <span class="tb-label">倍率</span>
+      <div class="seg" id="scaleSeg">
+        <button data-s="1">1x</button>
+        <button data-s="2" class="on">2x</button>
+        <button data-s="3">3x</button>
+        <button data-s="4">4x</button>
+      </div>
+    </div>
+    <div class="tb-group">
+      <span class="tb-label">JPG 质量</span>
+      <div class="q-row">
+        <input type="range" id="quality" min="55" max="100" value="92">
+        <span class="q-val" id="qualityVal">92</span>
+      </div>
+    </div>
+    <div class="tb-group">
+      <span class="tb-label">预览大小</span>
+      <div class="q-row">
+        <input type="range" id="previewSize" min="140" max="720" step="10" value="240" title="拖动调节页面预览大小">
+        <span class="q-val" id="previewSizeVal" style="min-width:46px">240px</span>
+      </div>
+    </div>
+    <div class="tb-main">
+      <button class="btn-ghost" id="selectAllBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        全选全部页
+      </button>
+      <button class="btn-main" id="exportBtn" disabled>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+        导出所选 JPG
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="busy">
+  <div class="busy-box">
+    <div class="spinner"></div>
+    <div class="busy-title" id="busyTitle">处理中…</div>
+    <div class="busy-sub" id="busySub"></div>
+    <div class="pbar"><i id="busyBar"></i></div>
+    <div class="busy-pct" id="busyPct">0%</div>
+  </div>
+</div>
+
+<div id="toast-wrap"></div>
+
+<div id="offstage"></div>
+
+<script src="assets/vendor/jquery.min.js"></script>
+<script src="assets/vendor/jszip.min.js"></script>
+<script src="assets/vendor/pdf.min.js"></script>
+<script src="assets/vendor/filereader.js"></script>
+<script src="assets/vendor/pptxjs.min.js"></script>
+<script src="assets/vendor/divs2slides.min.js"></script>
+<script src="assets/vendor/html2canvas.min.js"></script>
+<script>
+/* =====================================================================
+   PDF / PPT 转高清 JPG 工具
+   纯本地解析：PDF(pdf.js) / PPTX(pptxjs) / 图片，选择页面后按倍率导出 JPG
+   ===================================================================== */
+(function(){
+'use strict';
+
+/* ---------- 基础 ---------- */
+var pdfjsLib = window['pdfjs-dist/build/pdf'] || window.pdfjsLib;
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'assets/vendor/pdf.worker.min.js';
+
+var state = {
+  files: [],            // {id,name,type,file,pageCount,pages:[{id,item,type,data,thumb,ready,el}],doc(ppt doc),box(ppt jq)}
+  scale: 2,
+  quality: 0.92,
+  previewSize: 240,     // 缩略图预览宽度 px
+  thumbGen: 0,          // 缩略图重渲染世代号（防旧任务覆盖新结果）
+  seq: 0
+};
+
+function uid(){ return 'f' + (++state.seq) + '_' + Date.now(); }
+function $id(x){ return document.getElementById(x); }
+function esc(s){ return String(s).replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+function baseName(name){
+  var i = name.lastIndexOf('.');
+  return i > 0 ? name.slice(0, i) : name;
+}
+/* ---------- Toast ---------- */
+function toast(msg, type){
+  var t = document.createElement('div');
+  t.className = 'toast' + (type ? ' ' + type : '');
+  t.textContent = msg;
+  $id('toast-wrap').appendChild(t);
+  setTimeout(function(){ t.style.opacity = '0'; t.style.transition = 'opacity .3s'; }, 2600);
+  setTimeout(function(){ t.remove(); }, 3000);
+}
+
+/* ---------- 格式识别 ---------- */
+function detectType(file, head){
+  var ext = (file.name.split('.').pop() || '').toLowerCase();
+  if (ext === 'pdf' || head.slice(0,5) === '%PDF-') return 'pdf';
+  if (ext === 'pptx' || (ext === 'ppt' && head.slice(0,2) === 'PK')) return 'pptx';
+  if (['jpg','jpeg','png','webp','bmp'].indexOf(ext) !== -1) return 'image';
+  if (ext === 'ppt') return 'ppt-old';
+  return 'unknown';
+}
+
+/* ---------- 拖拽 / 选择 ---------- */
+var dz = $id('dropzone'), fileInput = $id('fileInput');
+dz.addEventListener('click', function(){ fileInput.click(); });
+dz.addEventListener('dragover', function(e){ e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', function(){ dz.classList.remove('drag'); });
+dz.addEventListener('drop', function(e){
+  e.preventDefault(); dz.classList.remove('drag');
+  handleFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', function(){ handleFiles(fileInput.files); fileInput.value = ''; });
+
+function handleFiles(fileList){
+  var files = Array.prototype.slice.call(fileList);
+  files.forEach(function(file){
+    var reader = new FileReader();
+    var f = { id: uid(), name: file.name, file: file, type: 'unknown', pageCount: 0, pages: [], doc: null, box: null, parsing: true, cancelled: false };
+    state.files.push(f);
+    reader.onload = function(e){
+      var buf = e.target.result;
+      var h = String.fromCharCode.apply(null, new Uint8Array(buf, 0, Math.min(8, buf.byteLength)));
+      f.type = detectType(file, h);
+      if (f.type === 'pdf') parsePdf(f, buf);
+      else if (f.type === 'pptx') parsePptx(f, buf);
+      else if (f.type === 'image') parseImage(f, file);
+      else if (f.type === 'ppt-old') { f.parsing = false; renderFileCard(f); toast('“' + file.name + '”是老版 PPT 格式，请先用 Office/WPS 另存为 PPTX 或 PDF 再导入', 'err'); }
+      else { f.parsing = false; renderFileCard(f); toast('“' + file.name + '”格式暂不支持（支持 PDF / PPTX / 图片）', 'err'); }
+    };
+    reader.onerror = function(){ f.parsing = false; renderFileCard(f); toast('读取文件失败：' + file.name, 'err'); };
+    reader.readAsArrayBuffer(file);
+    renderFileCard(f);
+  });
+}
+
+/* ---------- 渲染：文件卡片 ---------- */
+function typeMeta(t){
+  if (t === 'pdf') return { cls:'pdf', label:'PDF', icon:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>' };
+  if (t === 'pptx') return { cls:'pptx', label:'PPTX', icon:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/>' };
+  if (t === 'image') return { cls:'img', label:'图片', icon:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>' };
+  return { cls:'unknown', label:'未知', icon:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 11v4"/><path d="M12 18h.01"/>' };
+}
+
+function renderFileCard(f){
+  var holder = $id('fileList');
+  var old = document.getElementById(f.id);
+  if (old) old.remove();
+  var tm = typeMeta(f.type === 'unknown' ? 'img' : f.type);
+  var card = document.createElement('div');
+  card.className = 'file-card';
+  card.id = f.id;
+  card.innerHTML =
+    '<div class="file-head">' +
+      '<div class="file-type ' + tm.cls + '"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + tm.icon + '</svg></div>' +
+      '<div style="min-width:0">' +
+        '<div class="file-name">' + esc(f.name) + '</div>' +
+        '<div class="file-meta" id="' + f.id + '-meta">' + (f.parsing ? '解析中…' : '共 ' + f.pageCount + ' 页') + '</div>' +
+      '</div>' +
+      '<div class="file-actions">' +
+        '<button class="btn" data-act="all">全选</button>' +
+        '<button class="btn" data-act="none">清空</button>' +
+        '<button class="btn danger" data-act="del">移除</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="thumb-grid" id="' + f.id + '-grid"></div>';
+  holder.appendChild(card);
+
+  card.querySelectorAll('[data-act]').forEach(function(btn){
+    btn.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      var act = btn.getAttribute('data-act');
+      if (act === 'all') f.pages.forEach(function(p){ if (!p.fail) p.sel = true; });
+      if (act === 'none') f.pages.forEach(function(p){ p.sel = false; });
+      if (act === 'del') removeFile(f.id);
+      refreshThumbs(f); refreshBar();
+    });
+  });
+  refreshBar();
+}
+
+function renderThumb(f, p){
+  var grid = document.getElementById(f.id + '-grid');
+  if (!grid) return;
+  var t = document.createElement('button');
+  t.type = 'button';
+  t.className = 'thumb' + (p.sel ? ' sel' : '');
+  t.id = p.id;
+  t.innerHTML = '<div class="pg">' + p.n + '</div><div class="check">' +
+    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>' +
+    '<div class="load-tip">渲染中…</div>';
+  t.addEventListener('click', function(){ if (!p.fail) p.sel = !p.sel; refreshThumbs(f); refreshBar(); });
+  grid.appendChild(t);
+  if (p.fail) { t.querySelector('.load-tip').textContent = '预览失败'; return; }
+  if (p.thumb) {
+    t.querySelector('.load-tip').remove();
+    if (p.type === 'image') { var im = new Image(); im.onload = function(){ t.appendChild(im); }; im.src = p.thumb; }
+    else t.appendChild(p.thumb);
+  }
+}
+
+function refreshThumbs(f){
+  f.pages.forEach(function(p){
+    var el = document.getElementById(p.id);
+    if (el) { el.classList.toggle('sel', !!p.sel); }
+  });
+}
+
+function refreshBar(){
+  var sel = 0, total = 0;
+  state.files.forEach(function(f){
+    total += f.pages.length;
+    f.pages.forEach(function(p){ if (p.sel) sel++; });
+  });
+  $id('selCount').textContent = sel;
+  $id('totalCount').textContent = total;
+  $id('exportBtn').disabled = sel === 0;
+  dz.classList.toggle('compact', state.files.length > 0);
+}
+
+function removeFile(id){
+  var f = null;
+  state.files = state.files.filter(function(x){ if (x.id === id) { f = x; return false; } return true; });
+  var el = document.getElementById(id);
+  if (el) el.remove();
+  if (f) { f.cancelled = true; if (f.timer) clearInterval(f.timer); if (f.task) f.task.destroy(); }
+  if (f && f.pages[0] && f.pages[0].type === 'image') URL.revokeObjectURL(f.pages[0].thumb);
+  if (f && f.box) f.box.empty().remove();
+  refreshBar();
+}
+
+/* ---------- PDF 解析 ---------- */
+function parsePdf(f, buf){
+  var task = pdfjsLib.getDocument({ data: buf });
+  f.task = task;
+  task.promise.then(function(doc){
+    if (f.cancelled) return;
+    f.doc = doc;
+    f.pageCount = doc.numPages;
+    updateMeta(f);
+    var i = 1;
+    function next(){
+      if (f.cancelled) return;
+      if (i > doc.numPages) { finishParse(f); return; }
+      var n = i; i++;
+      doc.getPage(n).then(function(page){
+        var vp = page.getViewport({ scale: 1 });
+        var tscale = Math.min(2, state.previewSize / vp.width);
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(vp.width * tscale));
+        canvas.height = Math.max(1, Math.round(vp.height * tscale));
+        page.render({ canvasContext: canvas.getContext('2d'), viewport: page.getViewport({ scale: tscale }) }).promise.then(function(){
+          if (f.cancelled) return;
+          f.pages.push({ id: uid(), n: n, type: 'pdf', item: f, data: { doc: doc, page: page, vp: vp }, thumb: canvas, sel: false });
+          renderThumb(f, f.pages[f.pages.length - 1]);
+          refreshBar();
+          setTimeout(next, 0);
+        }).catch(function(err){ if (f.cancelled) return; console.error('pdf page render err', err); f.pages.push({ id: uid(), n: n, type: 'pdf', item: f, data: null, thumb: null, sel: false, fail: true }); renderThumb(f, f.pages[f.pages.length-1]); setTimeout(next, 0); });
+      }).catch(function(err){ if (f.cancelled) return; console.error('pdf getPage err', err); f.pages.push({ id: uid(), n: n, type: 'pdf', item: f, data: null, thumb: null, sel: false, fail: true }); renderThumb(f, f.pages[f.pages.length-1]); setTimeout(next, 0); });
+    }
+    next();
+  }).catch(function(err){
+    if (f.cancelled) return;
+    console.error('pdf load err', err);
+    f.parsing = false; f.pageCount = 0;
+    updateMeta(f);
+    toast('PDF 解析失败：' + f.name, 'err');
+  });
+}
+
+function updateMeta(f){
+  var m = document.getElementById(f.id + '-meta');
+  if (m) m.textContent = f.error || ((f.parsing ? '解析中…' : '') + (f.pageCount ? '共 ' + f.pageCount + ' 页' : ''));
+}
+
+function finishParse(f){
+  f.parsing = false;
+  updateMeta(f);
+  refreshBar();
+}
+
+/* ---------- PPTX 解析 ---------- */
+function parsePptx(f, buf){
+  var box = $('<div class="pptx-slides"></div>');
+  f.box = box;
+  $('#offstage').append(box);
+  try {
+    box.pptxToHtml({ fileContent: buf, slidesScale: '100%', slideNumber: '0' });
+    // pptxjs 1.21.1 会污染 Object.prototype，立即清理以免影响并行解析。
+    delete Object.prototype.set;
+  } catch (err) {
+    console.error('pptxToHtml err', err);
+    f.parsing = false; updateMeta(f);
+    toast('PPTX 解析失败：' + f.name + '（建议另存为 PDF 后导入）', 'err');
+    return;
+  }
+  // pptxjs 异步渲染，轮询等待 .slide 稳定
+  var lastLen = -1, stableMs = 0, waited = 0;
+  var timer = f.timer = setInterval(function(){
+    if (f.cancelled) { clearInterval(timer); return; }
+    var slides = box.find('.slide');
+    var len = slides.length;
+    if (len > 0 && len === lastLen) stableMs += 300; else { stableMs = 0; lastLen = len; }
+    waited += 300;
+    if (len > 0 && stableMs >= 600) {
+      clearInterval(timer);
+      onPptxSlides(f, box, slides);
+    } else if (waited > 60000) {
+      clearInterval(timer); f.parsing = false; f.error = 'PPTX 解析超时'; updateMeta(f);
+      toast('PPTX 解析超时：' + f.name + '（建议另存为 PDF 后导入）', 'err');
+    }
+  }, 300);
+}
+
+function onPptxSlides(f, box, slides){
+  if (f.cancelled) return;
+  slides.each(function(i){
+    var el = this;
+    f.pages.push({ id: uid(), n: i + 1, type: 'pptx', item: f, data: null, el: el, sel: false });
+    renderPptxThumb(f, f.pages[f.pages.length - 1]);
+  });
+  f.pageCount = slides.length;
+  f.parsing = false;
+  updateMeta(f);
+  refreshBar();
+}
+
+function renderPptxThumb(f, p){
+  var grid = document.getElementById(f.id + '-grid');
+  if (!grid) return;
+  var t = document.createElement('button');
+  t.type = 'button';
+  t.className = 'thumb' + (p.sel ? ' sel' : '');
+  t.id = p.id;
+  t.innerHTML = '<div class="pg">' + p.n + '</div><div class="check">' +
+    '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>' +
+    '<div class="load-tip">渲染中…</div>';
+  t.addEventListener('click', function(){ p.sel = !p.sel; refreshThumbs(f); refreshBar(); });
+  grid.appendChild(t);
+
+  var w = p.el.offsetWidth || 960;
+  html2canvas(p.el, { scale: Math.min(2, state.previewSize / w), backgroundColor: '#ffffff', logging: false }).then(function(canvas){
+    if (!document.getElementById(t.id)) return;
+    t.querySelector('.load-tip').remove();
+    t.appendChild(canvas);
+  }).catch(function(err){
+    console.error('ppt thumb err', err);
+    t.querySelector('.load-tip').textContent = '预览失败';
+  });
+}
+
+/* ---------- 图片解析 ---------- */
+function parseImage(f, file){
+  var url = URL.createObjectURL(file);
+  var img = new Image();
+  img.onload = function(){
+    if (f.cancelled) { URL.revokeObjectURL(url); return; }
+    f.pageCount = 1;
+    f.pages.push({ id: uid(), n: 1, type: 'image', item: f, data: { img: img, url: url }, thumb: url, sel: false, imageObj: img });
+    f.parsing = false;
+    updateMeta(f);
+    renderFileCard(f);
+    renderThumb(f, f.pages[0]);
+    refreshBar();
+  };
+  img.onerror = function(){ if (f.cancelled) return; f.parsing = false; updateMeta(f); toast('图片读取失败：' + f.name, 'err'); };
+  img.src = url;
+}
+
+/* ---------- 倍率 / 质量 ---------- */
+$id('scaleSeg').addEventListener('click', function(e){
+  var b = e.target.closest('button');
+  if (!b) return;
+  state.scale = parseInt(b.getAttribute('data-s'), 10);
+  this.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x === b); });
+});
+$id('quality').addEventListener('input', function(){
+  state.quality = parseInt(this.value, 10) / 100;
+  $id('qualityVal').textContent = this.value;
+});
+
+/* ---------- 预览大小滑杆 ---------- */
+function applyPreviewSize(){
+  document.documentElement.style.setProperty('--thumb-size', state.previewSize + 'px');
+  $id('previewSizeVal').textContent = state.previewSize + 'px';
+}
+applyPreviewSize();
+var previewTimer = null;
+$id('previewSize').addEventListener('input', function(){
+  var v = parseInt(this.value, 10);
+  state.previewSize = v;
+  applyPreviewSize();
+  // 拖动中先即时 CSS 放大，停止后 300ms 再用高分辨率重渲染
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(reRenderThumbs, 300);
+});
+
+/* 按当前预览大小重渲染所有 PDF / PPTX 缩略图（图片原图直接 CSS 放大） */
+function reRenderThumbs(){
+  var gen = ++state.thumbGen;
+  state.files.forEach(function(f){
+    f.pages.forEach(function(p){
+      if (p.type === 'pdf' && p.data) rerenderPdfThumb(p, gen);
+      else if (p.type === 'pptx' && p.el) rerenderPptxThumb(p, gen);
+    });
+  });
+}
+
+function rerenderPdfThumb(p, gen){
+  var vp = p.data.vp;
+  var t = Math.min(2, state.previewSize / vp.width);
+  var canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(vp.width * t));
+  canvas.height = Math.max(1, Math.round(vp.height * t));
+  p.data.page.render({ canvasContext: canvas.getContext('2d'), viewport: p.data.page.getViewport({ scale: t }) }).promise.then(function(){
+    if (gen !== state.thumbGen) return; // 已有更新的渲染，丢弃
+    p.thumb = canvas;
+    var el = document.getElementById(p.id);
+    if (!el) return;
+    var old = el.querySelector('canvas');
+    if (old) old.remove();
+    el.appendChild(canvas);
+  }).catch(function(err){ console.error('pdf thumb rerender err', err); });
+}
+
+function rerenderPptxThumb(p, gen){
+  var w = p.el.offsetWidth || 960;
+  var s = Math.min(2, state.previewSize / w);
+  html2canvas(p.el, { scale: s, backgroundColor: '#ffffff', logging: false }).then(function(canvas){
+    if (gen !== state.thumbGen) return;
+    p.thumb = canvas;
+    var el = document.getElementById(p.id);
+    if (!el) return;
+    var old = el.querySelector('canvas');
+    if (old) old.remove();
+    el.appendChild(canvas);
+  }).catch(function(err){ console.error('ppt thumb rerender err', err); });
+}
+$id('selectAllBtn').addEventListener('click', function(){
+  state.files.forEach(function(f){ f.pages.forEach(function(p){ if (!p.fail) p.sel = true; }); refreshThumbs(f); });
+  refreshBar();
+});
+
+/* ---------- 导出 ---------- */
+var busy = $id('busy');
+function showBusy(title, sub){ $id('busyTitle').textContent = title; $id('busySub').textContent = sub || ''; $id('busyBar').style.width = '0%'; $id('busyPct').textContent = '0%'; busy.classList.add('on'); }
+function setBusy(cur, total, extra){
+  var pct = total ? Math.round(cur / total * 100) : 0;
+  $id('busyBar').style.width = pct + '%';
+  $id('busyPct').textContent = pct + '%' + (extra ? '（' + extra + '）' : '');
+}
+function hideBusy(){ busy.classList.remove('on'); }
+
+function renderPageToCanvas(p, scale){
+  if (p.type === 'pdf' && p.data) {
+    var vp = p.data.page.getViewport({ scale: scale });
+    var canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.floor(vp.width));
+    canvas.height = Math.max(1, Math.floor(vp.height));
+    return p.data.page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise.then(function(){ return canvas; });
+  }
+  if (p.type === 'pptx' && p.el) {
+    return html2canvas(p.el, { scale: scale, backgroundColor: '#ffffff', logging: false, useCORS: true }).then(function(c){ return c; });
+  }
+  if (p.type === 'image') {
+    return new Promise(function(resolve){
+      var img = p.imageObj;
+      var canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth * scale; canvas.height = img.naturalHeight * scale;
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas);
+    });
+  }
+  return Promise.reject(new Error('该页面无法渲染'));
+}
+
+function canvasToBlob(canvas, quality){
+  return new Promise(function(resolve, reject){
+    canvas.toBlob(function(b){ b ? resolve(b) : reject(new Error('编码失败')); }, 'image/jpeg', quality);
+  });
+}
+
+function downloadBlob(blob, name){
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+
+$id('exportBtn').addEventListener('click', function(){ doExport(); });
+
+function doExport(){
+  var selected = [];
+  state.files.forEach(function(f){
+    f.pages.forEach(function(p){ if (p.sel) selected.push(p); });
+  });
+  if (!selected.length) return;
+
+  var scale = state.scale;
+  var q = state.quality;
+  var single = selected.length === 1;
+  var zip = null;
+  if (!single) zip = new JSZip();
+
+  showBusy('正在导出高清 JPG…', selected.length > 1 ? '共 ' + selected.length + ' 页，将打包为 ZIP' : '');
+  var done = 0;
+  var okCount = 0;
+
+  function next(i){
+    if (i >= selected.length) { finish(okCount, selected.length, single, zip); return; }
+    var p = selected[i];
+    var f = p.item;
+    var base = baseName(f.name);
+    var pageName = base + '-第' + p.n + '页.jpg';
+    renderPageToCanvas(p, scale).then(function(canvas){
+      return canvasToBlob(canvas, q).then(function(blob){
+        if (single) {
+          downloadBlob(blob, pageName);
+          done++; okCount++;
+          setBusy(done, selected.length, pageName);
+          next(i + 1);
+        } else {
+          // JSZip 2.x 不支持 Blob 输入，转 ArrayBuffer
+          return blob.arrayBuffer().then(function(ab){
+            zip.file((state.files.indexOf(f) + 1) + '-' + pageName, ab);
+            done++; okCount++;
+            setBusy(done, selected.length, pageName);
+            next(i + 1);
+          });
+        }
+      });
+    }).catch(function(err){
+      console.error('export err', err);
+      done++;
+      toast('导出失败：' + pageName, 'err');
+      setBusy(done, selected.length, pageName + '（失败）');
+      next(i + 1);
+    });
+  }
+  next(0);
+
+  function finish(ok, total, isSingle, z){
+    if (!isSingle) {
+      var blob = z.generate({ type: 'blob' }); // JSZip 2.x 同步生成
+      hideBusy();
+      downloadBlob(blob, '导出JPG_' + Date.now() + '.zip');
+      toast('已导出 ' + ok + ' / ' + total + ' 页', 'ok');
+    } else {
+      hideBusy();
+      toast('已导出 ' + ok + ' 页', 'ok');
+    }
+    refreshBar();
+  }
+}
+
+console.assert(baseName('a.b.pdf') === 'a.b' && detectType({ name:'x.PDF' }, '') === 'pdf', '基础文件识别检查失败');
+})();
+</script>
+</body>
+</html>
